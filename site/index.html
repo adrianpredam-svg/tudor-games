@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Tudor's Games</title>
+  <meta name="theme-color" content="#f97316" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon-180.png" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    header { padding: max(24px, env(safe-area-inset-top)) 16px 8px; text-align: center; }
+    header h1 { margin: 0; font-size: 2rem; }
+    header p { margin: 6px 0 0; color: var(--muted); }
+    main { max-width: 900px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    .game { display: flex; flex-direction: column; gap: 10px; text-decoration: none; background: var(--card); border: 3px solid var(--border); border-radius: 24px; padding: 20px; transition: transform .1s; }
+    .game:active { transform: scale(0.97); }
+    .game .pic { font-size: 3.5rem; line-height: 1; }
+    .game h2 { margin: 0; font-size: 1.35rem; }
+    .game p { margin: 0; color: var(--muted); }
+    footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎮 Tudor's Games</h1>
+    <p>Pick a game!</p>
+  </header>
+  <main>
+    <a class="game" href="/goal-kick/">
+      <span class="pic">⚽🥅</span>
+      <h2>Tudor's Goal Kick</h2>
+      <p>Head and kick every ball into the goal!</p>
+    </a>
+    <a class="game" href="/memory/">
+      <span class="pic">🐶🐱</span>
+      <h2>Memory</h2>
+      <p>Find the matching animal pairs.</p>
+    </a>
+    <a class="game" href="/balloons/">
+      <span class="pic">🎈🎈</span>
+      <h2>Balloon Pop</h2>
+      <p>Pop as many balloons as you can in 60 seconds.</p>
+    </a>
+  </main>
+  <footer>Made with love by Dad 💛</footer>
+</body>
+</html>

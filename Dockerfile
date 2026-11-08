@@ -1,0 +1,4 @@
+# Static games site for tudor.preda.app. nginx image works on ARM64 and x86.
+FROM nginx:1.27-alpine
+COPY site/ /usr/share/nginx/html/
+EXPOSE 80
