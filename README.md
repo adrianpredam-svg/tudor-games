@@ -1,7 +1,7 @@
 # Tudor's Games
 
 Simple games for kids, live at **https://tudor.preda.app**.
-Plain HTML/CSS/JavaScript, no build step. Each game lives in its own folder under `site/`.
+Games are plain HTML/CSS/JavaScript in `site/` (one folder per game). A small Node server in `server/` serves them and runs the online football matches.
 
 | Game | Folder |
 | --- | --- |
@@ -9,7 +9,10 @@ Plain HTML/CSS/JavaScript, no build step. Each game lives in its own folder unde
 | Memory (find animal pairs) | `site/memory/` |
 | Balloon Pop (60 seconds) | `site/balloons/` |
 | Design Your Flag (stripes, colours, shapes, name; saved in My flags) | `site/flag/` |
+| Spring Football (2 players online, club code needed) | `site/fusbal/` + `server/game.js` |
 
 **Add a game:** create `site/<name>/index.html`, then add a card for it in `site/index.html`.
-**Try locally:** open `site/index.html` with any small web server, e.g. `npx serve site`.
-**Deploy:** Coolify builds the `Dockerfile` (nginx) on every push to `main`.
+**Try locally:** `cd server && npm install && npm start`, then open http://localhost:3000. Football rules have tests: `npm test`.
+
+**Football club code:** set `FUSBAL_CODE` in Coolify (default `PREDA-FC`). Friends type it once with their name.
+**Deploy:** Coolify builds the `Dockerfile` (Node, port 3000) on every push to `main`.

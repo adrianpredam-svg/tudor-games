@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>Spring Football</title>
+  <meta name="theme-color" content="#15803d" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body { touch-action: manipulation; overscroll-behavior: none; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 0 12px max(12px, env(safe-area-inset-bottom)); }
+    .card { background: var(--card); border: 3px solid var(--border); border-radius: 22px; padding: 18px; display: grid; gap: 12px; }
+    .card h2 { margin: 0; }
+    label { display: grid; gap: 6px; font-weight: 700; }
+    input { font: inherit; font-size: 1.15rem; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--border); background: var(--bg); color: var(--text); }
+    .err { color: #dc2626; font-weight: 600; min-height: 1.2em; margin: 0; }
+    .muted { color: var(--muted); margin: 0; }
+    .rooms { display: grid; gap: 8px; }
+    .room { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 16px; border: 2px solid var(--border); background: var(--bg); font-weight: 700; }
+    .hidden { display: none !important; }
+    /* Game screen */
+    #game { position: fixed; inset: 0; background: #14532d; display: flex; flex-direction: column; }
+    .hud { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: max(8px, env(safe-area-inset-top)) 12px 6px; color: #fff; font-weight: 800; }
+    .hud .team { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: .95rem; }
+    .hud .team span.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; border: 2px solid #fff; }
+    .score { font-size: 1.6rem; letter-spacing: 2px; }
+    .stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0 6px; }
+    canvas { display: block; touch-action: none; border-radius: 10px; max-width: 100%; max-height: 100%; }
+    .msg { color: #fff; text-align: center; font-weight: 700; padding: 6px 12px max(8px, env(safe-area-inset-bottom)); min-height: 2.6em; }
+    .msg button { font: inherit; margin-left: 8px; padding: 6px 12px; border-radius: 10px; border: 0; font-weight: 800; }
+    .over { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .over .card { max-width: 380px; width: 100%; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="top" id="topbar"><a class="back" href="/">← Games</a><h1>⚽ Spring Football</h1></div>
+  <div class="wrap">
+    <!-- 1. Enter the club code and your name -->
+    <form class="card" id="login">
+      <h2>Join the football club</h2>
+      <p class="muted">Only friends who know the club code can play.</p>
+      <label>Club code <input id="code" autocomplete="off" autocapitalize="characters" required /></label>
+      <label>Your name <input id="name" maxlength="16" autocomplete="nickname" required /></label>
+      <p class="err" id="loginErr"></p>
+      <button class="btn" type="submit" id="loginBtn">Let's play ⚽</button>
+    </form>
+
+    <!-- 2. Lobby: open matches -->
+    <div class="card hidden" id="lobby">
+      <h2>Hi <span id="me"></span>! 👋</h2>
+      <button class="btn" id="create">➕ Start a new match</button>
+      <div id="waiting" class="hidden" style="display:grid;gap:8px;text-align:center">
+        <p><b>⏳ Waiting for another player…</b><br />The next friend who opens Spring Football can tap your name to play.</p>
+        <button class="btn secondary" id="cancel">Cancel</button>
+      </div>
+      <h3 style="margin:6px 0 0">Friends waiting to play</h3>
+      <div class="rooms" id="rooms"></div>
+      <p class="muted" id="noRooms">Nobody is waiting yet. Start a match and ask a friend to join!</p>
+      <div id="playingBox" class="hidden" style="display:grid;gap:8px">
+        <h3 style="margin:6px 0 0">Playing now</h3>
+        <div class="rooms" id="playing"></div>
+        <p class="muted">These friends are busy. Start your own match and wait for the next player!</p>
+      </div>
+      <details>
+        <summary><b>How to play</b></summary>
+        <p class="muted">Every player stands in a little hole and can't run. When your player has the ball, <b>pull him back</b> with your finger and <b>let go</b> — like a slingshot, the ball flies the other way. Pull further for a harder kick. A slow ball that rolls into any hole is caught by that player, even an opponent! Goalkeepers can't be pulled. You have 15 seconds per kick. First to 3 goals wins.</p>
+      </details>
+    </div>
+  </div>
+
+  <!-- 3. The match -->
+  <div id="game" class="hidden">
+    <div class="hud">
+      <div class="team"><span class="dot" id="myDot"></span><span class="name" id="myName"></span></div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="score" id="score">0 : 0</div><button id="sound" aria-label="Sound on or off" style="font-size:1.1rem;border:0;border-radius:10px;padding:4px 8px;background:rgba(255,255,255,.2);color:#fff">🔊</button></div>
+      <div class="team" style="justify-content:flex-end"><span class="name" id="oppName"></span><span class="dot" id="oppDot"></span></div>
+    </div>
+    <div class="stage" id="stage"><canvas id="pitch" width="640" height="960" aria-label="Football pitch"></canvas></div>
+    <div class="msg" id="msg"></div>
+  </div>
+  <div class="over hidden" id="over">
+    <div class="card">
+      <h2 id="overTitle"></h2>
+      <p class="muted" id="overText"></p>
+      <button class="btn" id="rematch">🔁 Play again</button>
+      <button class="btn secondary" id="toLobby">Back to the club</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const COLORS = { A: "#2563eb", B: "#dc2626" };
+  const GK_COLORS = { A: "#1e3a8a", B: "#7f1d1d" };
+  // Sizes come from the server when a match starts (these are just starting values).
+  let FIELD = { W: 600, H: 900, GOAL_L: 210, GOAL_R: 390 };
+  let R = { hole: 38, disc: 20, gk: 24, ball: 11 };
+  const M = 20; // margin around the field for the goals
+  let ws = null, myTeam = null, players = [], rules = { maxPull: 70 }, state = null, names = {};
+  let drag = null;       // { id, px, py } while I pull my player
+  let lastAimSent = 0;
+  let audio = null, soundOn = true;
+  try { soundOn = localStorage.getItem("fusbal-sound") !== "off"; } catch {}
+
+  // Remember name and code on this device
+  try { $("name").value = localStorage.getItem("fusbal-name") || ""; $("code").value = localStorage.getItem("fusbal-code") || ""; } catch {}
+
+  function beep(f, ms, v = 0.05) {
+    if (!soundOn) return;
+    try {
+      audio ??= new (window.AudioContext || window.webkitAudioContext)();
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + ms / 1000);
+    } catch {}
+  }
+
+  // ---------- Connection ----------
+  function connect(onOpen) {
+    ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/fusbal/ws`);
+    ws.onopen = onOpen;
+    ws.onmessage = (e) => handle(JSON.parse(e.data));
+    ws.onclose = () => {
+      if (!$("game").classList.contains("hidden") || !$("lobby").classList.contains("hidden")) {
+        show("login");
+        $("loginErr").textContent = "Connection lost. Tap Let's play to come back.";
+      }
+      $("loginBtn").disabled = false;
+    };
+  }
+  const sendMsg = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
+
+  $("login").addEventListener("submit", (e) => {
+    e.preventDefault();
+    $("loginErr").textContent = "";
+    $("loginBtn").disabled = true;
+    const hello = () => sendMsg({ t: "hello", code: $("code").value, name: $("name").value });
+    if (ws && ws.readyState === 1) hello(); else connect(hello);
+  });
+
+  function show(screen) {
+    $("login").classList.toggle("hidden", screen !== "login");
+    $("lobby").classList.toggle("hidden", screen !== "lobby");
+    $("game").classList.toggle("hidden", screen !== "game");
+    $("topbar").classList.toggle("hidden", screen === "game");
+    if (screen !== "game") $("over").classList.add("hidden");
+  }
+
+  function handle(m) {
+    switch (m.t) {
+      case "denied":
+        $("loginErr").textContent = m.reason; $("loginBtn").disabled = false; break;
+      case "welcome":
+        try { localStorage.setItem("fusbal-name", m.name); localStorage.setItem("fusbal-code", $("code").value); } catch {}
+        $("me").textContent = m.name; $("loginBtn").disabled = false; show("lobby"); break;
+      case "lobby": renderRooms(m.rooms); renderPlaying(m.playing || []); break;
+      case "waiting": $("waiting").classList.remove("hidden"); $("create").classList.add("hidden"); $("noRooms").classList.add("hidden"); break;
+      case "error": alert(m.reason); break;
+      case "start":
+        myTeam = m.team; players = m.players; rules = m.rules; names = m.names; state = null;
+        if (m.sizes) R = m.sizes; if (m.field) FIELD = m.field;
+        const opp = myTeam === "A" ? "B" : "A";
+        $("myName").textContent = names[myTeam] + " (you)"; $("oppName").textContent = names[opp];
+        $("myDot").style.background = COLORS[myTeam]; $("oppDot").style.background = COLORS[opp];
+        $("waiting").classList.add("hidden"); $("create").classList.remove("hidden");
+        $("over").classList.add("hidden");
+        $("rematch").disabled = false; $("rematch").textContent = "🔁 Play again";
+        show("game"); resize(); beep(660, 120); break;
+      case "state":
+        for (const ev of m.events) onEvent(ev);
+        state = m; updateHud(); break;
+      case "rematch":
+        if (m.ready.includes(myTeam)) { $("rematch").disabled = true; $("rematch").textContent = "Waiting for your friend…"; }
+        else $("overText").textContent = "Your friend wants to play again!";
+        break;
+      case "left":
+        alert("Your friend left the match."); show("lobby"); break;
+    }
+  }
+
+  function renderRooms(list) {
+    const el = $("rooms"); el.innerHTML = "";
+    // While I'm waiting myself, "nobody is waiting" would be confusing.
+    $("noRooms").classList.toggle("hidden", list.length > 0 || !$("waiting").classList.contains("hidden"));
+    for (const r of list) {
+      const row = document.createElement("div"); row.className = "room";
+      const n = document.createElement("span"); n.textContent = `⚽ ${r.host}`;
+      const b = document.createElement("button"); b.className = "btn"; b.textContent = "Play";
+      b.style.padding = "10px 18px";
+      b.addEventListener("click", () => sendMsg({ t: "join", id: r.id }));
+      row.append(n, b); el.appendChild(row);
+    }
+  }
+  function renderPlaying(list) {
+    const el = $("playing"); el.innerHTML = "";
+    $("playingBox").classList.toggle("hidden", list.length === 0);
+    for (const g of list) {
+      const row = document.createElement("div"); row.className = "room";
+      const a = document.createElement("span"), sc = document.createElement("span"), b = document.createElement("span");
+      a.textContent = g.a; b.textContent = g.b;
+      sc.textContent = g.over ? `${g.score.A} : ${g.score.B} · full time` : `${g.score.A} : ${g.score.B}`;
+      sc.style.whiteSpace = "nowrap"; b.style.textAlign = "right";
+      a.style.color = "#2563eb"; b.style.color = "#dc2626";
+      row.append(a, sc, b); el.appendChild(row);
+    }
+  }
+  $("create").addEventListener("click", () => sendMsg({ t: "create" }));
+  $("cancel").addEventListener("click", () => { sendMsg({ t: "leave" }); $("waiting").classList.add("hidden"); $("create").classList.remove("hidden"); });
+  $("rematch").addEventListener("click", () => sendMsg({ t: "rematch" }));
+  const soundLabel = () => { $("sound").textContent = soundOn ? "🔊" : "🔇"; };
+  soundLabel();
+  $("sound").addEventListener("click", () => { soundOn = !soundOn; soundLabel(); try { localStorage.setItem("fusbal-sound", soundOn ? "on" : "off"); } catch {} });
+  $("toLobby").addEventListener("click", () => { sendMsg({ t: "leave" }); show("lobby"); });
+
+  function onEvent(ev) {
+    if (ev.type === "kick") beep(320, 60, 0.06);
+    if (ev.type === "catch") beep(ev.team === myTeam ? 880 : 240, 70, 0.04);
+    if (ev.type === "goal") { beep(ev.team === myTeam ? 990 : 180, 500, 0.07); if (navigator.vibrate) navigator.vibrate(ev.team === myTeam ? [80, 60, 80] : 200); }
+    if (ev.type === "over") {
+      const win = ev.team === myTeam;
+      $("overTitle").textContent = win ? "🏆 You won!" : "😅 You lost this time";
+      $("overText").textContent = win ? "Great passing!" : "Practise your pulls and try again!";
+      setTimeout(() => $("over").classList.remove("hidden"), 1200);
+    }
+  }
+
+  function updateHud() {
+    const opp = myTeam === "A" ? "B" : "A";
+    $("score").textContent = `${state.score[myTeam]} : ${state.score[opp]}`;
+    const h = state.holder !== null ? players[state.holder] : null;
+    let text = "";
+    if (state.phase === "goal") text = state.lastGoal === myTeam ? "⚽ GOAL! Well done!" : "Goal for your friend…";
+    else if (state.phase === "over") text = "Full time!";
+    else if (h && h.team === myTeam) text = `Your ball! Pull your player back and let go · ⏱ ${state.clock}`;
+    else if (h) text = `Your friend is aiming… · ⏱ ${state.clock}`;
+    else text = "The ball is rolling…";
+    $("msg").textContent = text;
+  }
+
+  // ---------- Drawing ----------
+  const canvas = $("pitch"), ctx = canvas.getContext("2d");
+  function resize() {
+    const st = $("stage").getBoundingClientRect();
+    const scale = Math.min(st.width / 640, st.height / 960);
+    canvas.style.width = `${Math.floor(640 * scale)}px`;
+    canvas.style.height = `${Math.floor(960 * scale)}px`;
+  }
+  window.addEventListener("resize", resize);
+
+  // Team B sees the field turned around, so everyone's own goal is at the bottom.
+  const flip = () => myTeam === "B";
+  const toView = (x, y) => (flip() ? [M + FIELD.W - x, M + FIELD.H - y] : [M + x, M + y]);
+  function toField(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    const vx = ((clientX - r.left) / r.width) * 640 - M, vy = ((clientY - r.top) / r.height) * 960 - M;
+    return flip() ? [FIELD.W - vx, FIELD.H - vy] : [vx, vy];
+  }
+
+  function drawField() {
+    // grass stripes
+    for (let i = 0; i < 10; i++) { ctx.fillStyle = i % 2 ? "#16a34a" : "#15803d"; ctx.fillRect(0, i * 96, 640, 96); }
+    ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 3;
+    ctx.strokeRect(M, M, FIELD.W, FIELD.H);
+    ctx.beginPath(); ctx.moveTo(M, M + FIELD.H / 2); ctx.lineTo(M + FIELD.W, M + FIELD.H / 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(M + FIELD.W / 2, M + FIELD.H / 2, 70, 0, Math.PI * 2); ctx.stroke();
+    // penalty boxes
+    ctx.strokeRect(M + 140, M, 320, 120); ctx.strokeRect(M + 140, M + FIELD.H - 120, 320, 120);
+    // goals (nets behind the lines)
+    for (const top of [true, false]) {
+      const y = top ? M - 18 : M + FIELD.H;
+      ctx.fillStyle = "rgba(255,255,255,.25)"; ctx.fillRect(M + FIELD.GOAL_L, y, FIELD.GOAL_R - FIELD.GOAL_L, 18);
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 4; ctx.strokeRect(M + FIELD.GOAL_L, y, FIELD.GOAL_R - FIELD.GOAL_L, 18);
+    }
+  }
+
+  function drawPlayer(p, now) {
+    const [cx, cy] = toView(p.x, p.y);
+    const isHolder = state && state.holder === p.id;
+    // the hole
+    if (!p.gk) {
+      ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.arc(cx, cy, R.hole, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 2; ctx.stroke();
+    }
+    // the player is pulled back on his spring
+    let ox = 0, oy = 0, pull = null;
+    if (isHolder) {
+      if (drag && drag.id === p.id) pull = [drag.px, drag.py];
+      else if (state.aim && players[state.holder].team !== myTeam) pull = state.aim;
+    }
+    if (pull) {
+      const len = Math.hypot(pull[0], pull[1]), k = Math.min(len, rules.maxPull) / (len || 1);
+      const max = R.hole - R.disc;
+      const vx = (flip() ? -pull[0] : pull[0]) * k, vy = (flip() ? -pull[1] : pull[1]) * k;
+      const vlen = Math.hypot(vx, vy) || 1;
+      ox = (vx / vlen) * Math.min(max, vlen * max / rules.maxPull * 1.3);
+      oy = (vy / vlen) * Math.min(max, vlen * max / rules.maxPull * 1.3);
+      // spring band from hole centre to the finger
+      ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 4; ctx.setLineDash([6, 5]);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + vx, cy + vy); ctx.stroke(); ctx.setLineDash([]);
+      // direction the ball will go, longer for a harder kick (my own pulls only)
+      if (drag && drag.id === p.id) {
+        const power = Math.min(len, rules.maxPull) / rules.maxPull;
+        const ax = cx - (vx / vlen) * (40 + 120 * power), ay = cy - (vy / vlen) * (40 + 120 * power);
+        ctx.strokeStyle = "#fde047"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ax, ay); ctx.stroke();
+        const ang = Math.atan2(ay - cy, ax - cx);
+        ctx.fillStyle = "#fde047"; ctx.beginPath(); ctx.moveTo(ax + Math.cos(ang) * 12, ay + Math.sin(ang) * 12);
+        ctx.lineTo(ax + Math.cos(ang + 2.4) * 12, ay + Math.sin(ang + 2.4) * 12); ctx.lineTo(ax + Math.cos(ang - 2.4) * 12, ay + Math.sin(ang - 2.4) * 12); ctx.fill();
+      }
+    }
+    // highlight the player with the ball
+    if (isHolder && state.phase === "play") {
+      const pulse = 4 + Math.sin(now / 150) * 3;
+      ctx.strokeStyle = players[state.holder].team === myTeam ? "#fde047" : "rgba(255,255,255,.7)"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(cx, cy, R.hole + pulse, 0, Math.PI * 2); ctx.stroke();
+    }
+    // the player disc
+    const r = p.gk ? R.gk : R.disc;
+    ctx.fillStyle = p.gk ? GK_COLORS[p.team] : COLORS[p.team];
+    ctx.beginPath(); ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 18px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(p.gk ? "GK" : String(p.num), cx + ox, cy + oy + 1);
+  }
+
+  function drawBall() {
+    if (!state) return;
+    let [x, y] = state.ball;
+    // A held ball sits just in front of the player, towards the goal he attacks.
+    if (state.holder !== null) { const h = players[state.holder]; x = h.x; y = h.y + (h.team === "A" ? -(R.disc + R.ball) : R.disc + R.ball); }
+    const [cx, cy] = toView(x, y);
+    ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(cx + 3, cy + 4, R.ball, R.ball * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(cx, cy, R.ball + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#111"; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function frame(now) {
+    if (!$("game").classList.contains("hidden")) {
+      ctx.clearRect(0, 0, 640, 960);
+      drawField();
+      for (const p of players) drawPlayer(p, now);
+      drawBall();
+      if (state && state.phase === "goal") {
+        ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fillRect(0, 400, 640, 160);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 72px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("GOAL!", 320, 480);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---------- Pull and release ----------
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!state || state.phase !== "play" || state.holder === null) return;
+    const h = players[state.holder];
+    if (h.team !== myTeam) return;
+    const [fx, fy] = toField(e.clientX, e.clientY);
+    if (Math.hypot(fx - h.x, fy - h.y) > 70) return; // must grab near your player
+    drag = { id: h.id, px: 0, py: 0 };
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const h = players[drag.id];
+    const [fx, fy] = toField(e.clientX, e.clientY);
+    drag.px = fx - h.x; drag.py = fy - h.y;
+    const now = performance.now();
+    if (now - lastAimSent > 66) { lastAimSent = now; sendMsg({ t: "aim", px: drag.px, py: drag.py }); }
+  });
+  function release(cancel) {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (cancel || Math.hypot(d.px, d.py) < 8) { sendMsg({ t: "aim", px: null, py: null }); return; }
+    sendMsg({ t: "kick", id: d.id, px: d.px, py: d.py });
+  }
+  canvas.addEventListener("pointerup", () => release(false));
+  canvas.addEventListener("pointercancel", () => release(true));
+  // If the ball is taken away while I'm still pulling (shot clock), stop the pull.
+  setInterval(() => { if (drag && state && state.holder !== drag.id) drag = null; }, 100);
+
+  // For automated tests
+  window.__fusbal = { get state() { return state; }, get team() { return myTeam; }, get players() { return players; } };
+})();
+</script>
+</body>
+</html>
